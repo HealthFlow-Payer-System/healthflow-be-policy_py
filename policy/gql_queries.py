@@ -51,6 +51,13 @@ class PolicyGQLType(DjangoObjectType):
         }
         connection_class = ExtendedConnection
 
+    @classmethod
+    def get_queryset(cls, queryset, info):
+        # Prevent duplicate Policy records when filtering by chfId through
+        # insuree_policies__insuree__chf_id. This type of filter creates a JOIN
+        # that can return multiple rows per Policy if multiple InsureePolicies exist.
+        return queryset.distinct()
+
 class PolicyRenewalGQLType(DjangoObjectType):
     class Meta:
         model = PolicyRenewal
