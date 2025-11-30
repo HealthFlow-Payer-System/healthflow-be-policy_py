@@ -3,7 +3,7 @@ import json
 from dataclasses import dataclass
 from core.utils import filter_validity
 from core.models import User
-from core.test_helpers import create_test_interactive_user
+from core.test_helpers import create_test_interactive_user, create_test_officer
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase, BaseTestContext as DummyContext
 
 
@@ -95,6 +95,8 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
         cls.not_insuree = create_test_insuree(
             with_family=False, custom_props={"family": cls.insuree.family}
         )
+
+        cls.test_officer = create_test_officer()
 
     def test_insuree_policy_query(self):
 
@@ -370,7 +372,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             value: "10000.00"
             productId: {self.product.id}
             familyId: {self.insuree.family.id}
-            officerId: 1
+            officerId: {self.test_officer.id}
                     }}
         ) {{
             clientMutationId
