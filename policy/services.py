@@ -77,9 +77,9 @@ class PolicyService:
         if "enroll_date" in data and data["enroll_date"] > py_date.today():
             raise ValidationError("policy.enroll_date_in_the_future")
         if policy_uuid:
-            return self.update_policy(data, user)
+            return self.update_policy(data, user=user)
         else:
-            return self.create_policy(data, user)
+            return self.create_policy(data, user=user)
 
     @register_service_signal("policy_service.update")
     def update_policy(self, data, user):
@@ -99,7 +99,7 @@ class PolicyService:
         reset_policy_before_update(policy)
         [setattr(policy, key, data[key]) for key in data]
         policy.save()
-        update_insuree_policies(policy, user, members=members)
+        update_insuree_policies(policy, user=user, members=members)
         return policy
 
     @register_service_signal("policy_service.create")
@@ -443,6 +443,8 @@ class FilteredPoliciesService(object):
         res.query.group_by = ["id"]
         if hasattr(req, "chf_id"):
             res = res.filter(insuree_policies__insuree__chf_id=req.chf_id)
+        elif hasattr(req, "insuree_uuid"):
+            res = res.filter(insuree_policies__insuree__uuid=req.insuree_uuid)
         if not req.show_history:
             if req.target_date:
                 res = res.filter(
@@ -555,7 +557,65 @@ class ByFamilyService(FilteredPoliciesService):
             res = products.values()
         items = tuple(map(lambda x: FilteredPoliciesService._to_item(x), res))
         return ByFamilyResponse(by_family_request=by_family_request, items=items)
+@core.comparable
+class ByPolicyRequest(object):
 
+    def __init__(
+        self,      
+        policy_uuid,
+        chf_id=None,
+        insuree_uuid=None,
+        active_or_last_expired_only=False,
+        show_history=False,
+        order_by=None,
+        target_date=None,
+    ):
+        if chf_id is None and insuree_uuid is None:
+            raise ValueError(_("policy.service.eligibility.insuree_id_or_uuid_missing"))
+        self.policy_uuid = policy_uuid
+        self.chf_id = chf_id
+        self.insuree_uuid = insuree_uuid 
+        self.active_or_last_expired_only = active_or_last_expired_only
+        self.show_history = show_history
+        self.order_by = order_by
+        self.target_date = target_date
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+
+@core.comparable
+class ByPolicyResponse(object):
+
+    def __init__(self, by_family_request, items):
+        self.by_policy_request = by_policy_request
+        self.items = items
+
+    def __eq__(self, other):
+        return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
+
+
+class ByPolicyService(FilteredPoliciesService):
+    def __init__(self, user):
+        super(ByPolicyService, self).__init__(user)
+
+    def request(self, by_policy_request):
+        res = self.build_query(by_policy_request)
+        res = res.filter(fuuid=by_policy_request.policy_uuid)
+        # .distinct('product__code') >> DISTINCT ON fields not supported by MS-SQL
+        if by_policy_request.active_or_last_expired_only:
+            products = {}
+            for policy in res:
+                if (
+                    policy.status == Policy.STATUS_IDLE
+                    or policy.status == Policy.STATUS_READY
+                ):
+                    products["policy.product.code-%s" % policy.uuid] = policy
+                elif policy.product.code not in products.keys():
+                    products[policy.product.code] = policy
+            res = products.values()
+        items = tuple(map(lambda x: FilteredPoliciesService._to_item(x), res))
+        return ByPolicyResponse(by_policy_request=by_policy_request, items=items)
 
 # --- ELIGIBILITY --
 # TODO: should become "BY FAMILY":
@@ -565,10 +625,16 @@ class ByFamilyService(FilteredPoliciesService):
 @core.comparable
 class EligibilityRequest(object):
 
-    def __init__(self, chf_id, service_code=None, item_code=None):
+    def __init__(self, chf_id=None, service_code=None, item_code=None, 
+                 policy_uuid=None, insuree_uuid=None):
+        if chf_id is None and insuree_uuid is None:
+            raise ValueError(_("policy.service.eligibility.insuree_id_or_uuid_missing"))
         self.chf_id = chf_id
         self.service_code = service_code
         self.item_code = item_code
+        self.policy_uuid = policy_uuid
+        self.insuree_uuid = insuree_uuid
+        
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
@@ -712,74 +778,6 @@ class EligibilityService(object):
         else:
             return responses[-1]
 
-
-class StoredProcEligibilityService(object):
-    def __init__(self, user):
-        self.user = user
-
-    def request(self, req, response):
-        with connection.cursor() as cur:
-            sql = """\
-                DECLARE @MinDateService DATE, @MinDateItem DATE,
-                        @ServiceLeft INT, @ItemLeft INT,
-                        @isItemOK BIT, @isServiceOK BIT;
-                EXEC [dbo].[uspServiceItemEnquiry] @CHFID = %s, @ServiceCode = %s, @ItemCode = %s,
-                     @MinDateService = @MinDateService OUTPUT, @MinDateItem = @MinDateItem OUTPUT,
-                     @ServiceLeft = @ServiceLeft OUTPUT, @ItemLeft = @ItemLeft OUTPUT,
-                     @isItemOK = @isItemOK OUTPUT, @isServiceOK = @isServiceOK OUTPUT;
-                SELECT @MinDateService, @MinDateItem, @ServiceLeft, @ItemLeft, @isItemOK, @isServiceOK
-            """
-            cur.execute(sql, (req.chf_id, req.service_code, req.item_code))
-            res = cur.fetchone()  # retrieve the stored proc @Result table
-            if res is None:
-                return response
-
-            (
-                prod_id,
-                total_admissions_left,
-                total_visits_left,
-                total_consultations_left,
-                total_surgeries_left,
-                total_deliveries_left,
-                total_antenatal_left,
-                consultation_amount_left,
-                surgery_amount_left,
-                delivery_amount_left,
-                hospitalization_amount_left,
-                antenatal_amount_left,
-            ) = res
-            cur.nextset()
-            (
-                min_date_service,
-                min_date_item,
-                service_left,
-                item_left,
-                is_item_ok,
-                is_service_ok,
-            ) = cur.fetchone()
-            return EligibilityResponse(
-                eligibility_request=req,
-                prod_id=prod_id or None,
-                total_admissions_left=total_admissions_left,
-                total_visits_left=total_visits_left,
-                total_consultations_left=total_consultations_left,
-                total_surgeries_left=total_surgeries_left,
-                total_deliveries_left=total_deliveries_left,
-                total_antenatal_left=total_antenatal_left,
-                consultation_amount_left=consultation_amount_left,
-                surgery_amount_left=surgery_amount_left,
-                delivery_amount_left=delivery_amount_left,
-                hospitalization_amount_left=hospitalization_amount_left,
-                antenatal_amount_left=antenatal_amount_left,
-                min_date_service=min_date_service,
-                min_date_item=min_date_item,
-                service_left=service_left,
-                item_left=item_left,
-                is_item_ok=is_item_ok is True,
-                is_service_ok=is_service_ok is True,
-            )
-
-
 class NativeEligibilityService(object):
     def __init__(self, user):
         self.user = user
@@ -909,8 +907,10 @@ class NativeEligibilityService(object):
                 Q(insuree__claim__services__rejection_reason=0)
                 | Q(insuree__claim__services__rejection_reason__isnull=True)
             )
-        insuree = Insuree.get_queryset(None, self.user).get(
-            chf_id=req.chf_id, *core.filter_validity()
+        insuree_filter = {'chf_id': req.chf_id} if req.chf_id is not None else {'uuid': req.insuree_uuid}
+        policy_filter = {'policy__uuid': req.policy_uuid} if req.policy_uuid is not None else {}
+        insuree = Insuree.get_queryset(None, self.user).filter(**insuree_filter).get(
+            *core.filter_validity()
         )  # Will throw an exception if not found
         now = core.datetime.datetime.now()
         eligibility = response
@@ -949,6 +949,7 @@ class NativeEligibilityService(object):
                     insuree=insuree,
                     *core.filter_validity(prefix="policy__product__"),
                     *core.filter_validity(prefix="policy__"),
+                    **policy_filter,
                 )
                 .values(
                     "policy__product_id",
