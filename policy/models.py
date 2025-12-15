@@ -73,7 +73,7 @@ class Policy(core_models.VersionedModel):
         return models.Sum(
             "premiums__amount",
             filter=models.Q(
-                *filter_validity(prefix="premiums__"), premiums__is_photo_fee=photo
+                *Policy.filter_validity(prefix="premiums__"), premiums__is_photo_fee=photo
             ),
         )
 

@@ -185,7 +185,7 @@ class Query(graphene.ObjectType):
             raise PermissionDenied(_("unauthorized"))
         query = Policy.objects
         if not kwargs.get("showHistory", False):
-            query = query.filter(*filter_validity(**kwargs))
+            query = query.filter(*Policy.filter_validity(**kwargs))
         if kwargs.get("showInactive", False):
             family_count = (
                 Insuree.objects.values("family_id")

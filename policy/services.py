@@ -557,6 +557,8 @@ class ByFamilyService(FilteredPoliciesService):
             res = products.values()
         items = tuple(map(lambda x: FilteredPoliciesService._to_item(x), res))
         return ByFamilyResponse(by_family_request=by_family_request, items=items)
+
+
 @core.comparable
 class ByPolicyRequest(object):
 
