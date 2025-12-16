@@ -1420,12 +1420,12 @@ def update_insuree_policies(policy, user, members=None):
     members = get_members(policy, policy.family, user, members)
     for member in members:
         existing_ip = InsureePolicy.objects.filter(
-            validity_to__isnull=True, insuree=member, policy=policy
+            *InsureePolicy.filter_validity(), insuree=member, policy=policy
         ).first()
         if existing_ip:
             existing_ip.save_history()
         ip, ip_created = InsureePolicy.objects.filter(
-            validity_to__isnull=True
+            *InsureePolicy.filter_validity()
         ).update_or_create(
             insuree=member,
             policy=policy,
@@ -1436,7 +1436,7 @@ def update_insuree_policies(policy, user, members=None):
                 expiry_date=policy.expiry_date,
                 offline=policy.offline,
                 audit_user_id=(
-                    user.id_for_audit if hasattr(user, "audit_user_id") else user
+                    getattr(user, "id_for_audit", getattr(user, "id", user if isinstance(user, int) else -1))
                 ),
             ),
         )

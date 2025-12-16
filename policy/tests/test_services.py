@@ -11,7 +11,7 @@ from claim.validations import (
 )
 from claim.services import processing_claim
 from core.models import InteractiveUser, User
-from core.test_helpers import create_test_officer
+from core.test_helpers import create_test_officer,  create_test_interactive_user
 from django.conf import settings
 from django.test import TestCase
 from insuree.test_helpers import create_test_photo
@@ -378,10 +378,8 @@ class RenewalsTestCase(TestCase):
 
     def setUp(self) -> None:
         super(RenewalsTestCase, self).setUp()
-        self.i_user = InteractiveUser(
-            login_name="test_batch_run", audit_user_id=978911, id=97891
-        )
-        self.user = User(i_user=self.i_user)
+
+        self.user = create_test_interactive_user(username='test_batch_run')
 
         self.item_1 = create_test_item("D")
 
