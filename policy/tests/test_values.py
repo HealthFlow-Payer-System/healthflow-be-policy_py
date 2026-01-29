@@ -1,19 +1,18 @@
 import core
-
+import datetime
 from django.test import TestCase
-from insuree.test_helpers import create_test_insuree, create_test_photo
+from insuree.test_helpers import create_test_insuree
 from product.test_helpers import create_test_product
 from insuree.models import Relation
-from policy.values import *
+from policy.values import policy_values
 from policy.test_helpers import create_test_policy
 from core.apps import CoreConfig
 from core.test_helpers import create_test_interactive_user
 from dateutil.relativedelta import relativedelta
-from core.models.user import User
 
 
 class PolicyValuesTestCase(TestCase):
-    test_child_dob = py_datetime.date.today() - relativedelta(
+    test_child_dob = datetime.date.today() - relativedelta(
         years=CoreConfig.age_of_majority - 2
     )
     user = None
@@ -130,7 +129,7 @@ class PolicyValuesTestCase(TestCase):
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
         self.assertEquals(policy.start_date, core.datetime.date(2021, 1, 1))
         self.assertEquals(policy.expiry_date, core.datetime.date(2021, 12, 31))
-        self.assertEquals(policy.value, 230)  #  200 + 2 x 10 + 0
+        self.assertEquals(policy.value, 230)  # 200 + 2 x 10 + 0
 
         # let's add a child (outside threshold)  and shift date in 1st cycle grace period
         child = Relation.objects.get(id=4)

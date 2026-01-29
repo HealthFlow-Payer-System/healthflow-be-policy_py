@@ -4,7 +4,6 @@ from insuree.test_helpers import create_test_insuree
 from policy.models import Policy
 from policy.values import policy_values
 from product.models import Product
-from core.utils import filter_validity
 from core.test_helpers import create_test_interactive_user
 import datetime
 
