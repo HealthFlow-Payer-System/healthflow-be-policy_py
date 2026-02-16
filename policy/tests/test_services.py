@@ -111,7 +111,7 @@ class EligibilityServiceTestCase(TestCase):
                 is_item_ok=True,
                 is_service_ok=True,
             )
-            self.assertEquals(expected, res)
+            self.assertEqual(expected, res)
 
     def eligibility_serv(self, category):
         insuree, family = create_test_insuree_for_policy(
@@ -158,7 +158,7 @@ class EligibilityServiceTestCase(TestCase):
         settings.ROW_SECURITY = False
         native_response = native_el_svc.request(req, EligibilityResponse(req))
         self.assertIsNotNone(native_response)
-        self.assertEquals(native_response, expected_resposnse)
+        self.assertEqual(native_response, expected_resposnse)
 
     def test_eligibility_item(self):
         insuree, family = create_test_insuree_for_policy()
@@ -205,7 +205,7 @@ class EligibilityServiceTestCase(TestCase):
         native_response = EligibilityResponse(req)
         native_response = native_el_svc.request(req, native_response)
         self.assertIsNotNone(native_response)
-        self.assertEquals(native_response, expected_resposnse)
+        self.assertEqual(native_response, expected_resposnse)
 
     def test_eligibility_by_insuree(self):
         insuree, family = create_test_insuree_for_policy()
@@ -253,7 +253,7 @@ class EligibilityServiceTestCase(TestCase):
         native_response = EligibilityResponse(req)
         native_response = native_el_svc.request(req, native_response)
         self.assertIsNotNone(native_response)
-        self.assertEquals(native_response, expected_resposnse)
+        self.assertEqual(native_response, expected_resposnse)
         result = PolicyService(self.user).set_deleted(policy)
         self.assertNotEquals(
             result, [], "the policy cannot be deleted as it has some DedRem on it"
@@ -296,7 +296,7 @@ class EligibilityServiceTestCase(TestCase):
 
         response = el_svc.request(req)
         self.assertIsNotNone(response)
-        self.assertEquals(response.total_admissions_left, 444719)
+        self.assertEqual(response.total_admissions_left, 444719)
 
         signal_eligibility_service_before.disconnect(signal_before)
 
@@ -373,8 +373,8 @@ class RenewalsTestCase(TestCase):
         policy_expiring.refresh_from_db()
         policy_not_expired_yet.refresh_from_db()
 
-        self.assertEquals(policy_expiring.status, Policy.STATUS_EXPIRED)
-        self.assertEquals(policy_not_expired_yet.status, Policy.STATUS_ACTIVE)
+        self.assertEqual(policy_expiring.status, Policy.STATUS_EXPIRED)
+        self.assertEqual(policy_not_expired_yet.status, Policy.STATUS_ACTIVE)
 
     def test_renewals_sms(self):
         # Given
@@ -420,14 +420,14 @@ class RenewalsTestCase(TestCase):
 
         self.assertTrue(len(sms_queue) > 0)
         insuree_sms = [sms for sms in sms_queue if sms.phone == "+33644444719"]
-        self.assertEquals(len(insuree_sms), 1)
-        self.assertEquals(
+        self.assertEqual(len(insuree_sms), 1)
+        self.assertEqual(
             insuree_sms[0].sms_message,
             f"FAMSMS;{insuree.chf_id};Test Last;Test product VISIT",
         )
 
         officer_sms = [sms for sms in sms_queue if sms.phone == "+32444444444"]
-        self.assertEquals(len(officer_sms), 1)
+        self.assertEqual(len(officer_sms), 1)
         self.assertIn(insuree.chf_id, officer_sms[0].sms_message)
         self.assertIn(family.location.name, officer_sms[0].sms_message)
         self.assertIn(family.location.parent.name, officer_sms[0].sms_message)
@@ -491,13 +491,13 @@ class RenewalsTestCase(TestCase):
 
         # ALSO WHEN
         sms_queue = policy_renewal_sms("UNUSED")  # Uses the default template
-        self.assertEquals(len(sms_queue), 2)
+        self.assertEqual(len(sms_queue), 2)
         old_sms = [
             sms.sms_message
             for sms in sms_queue
             if insuree_oldpic.chf_id in sms.sms_message
         ]
-        self.assertEquals(len(old_sms), 1)
+        self.assertEqual(len(old_sms), 1)
         self.assertTrue(
             f"HOF\n{insuree_oldpic.chf_id}\nTest Last First Second\n\n" in old_sms[0]
         )

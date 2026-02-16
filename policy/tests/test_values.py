@@ -58,9 +58,9 @@ class PolicyValuesTestCase(TestCase):
             },
         )
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
-        self.assertEquals(policy.start_date, core.datetime.date(2020, 11, 10))
-        self.assertEquals(policy.expiry_date, core.datetime.date(2021, 11, 9))
-        self.assertEquals(policy.value, 980)  # 2 x 300 + 250 + 130
+        self.assertEqual(policy.start_date, core.datetime.date(2020, 11, 10))
+        self.assertEqual(policy.expiry_date, core.datetime.date(2021, 11, 9))
+        self.assertEqual(policy.value, 980)  # 2 x 300 + 250 + 130
 
         # let's add a child and shift date to 1st of a month
         child = Relation.objects.get(id=4)
@@ -81,9 +81,9 @@ class PolicyValuesTestCase(TestCase):
             },
         )
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
-        self.assertEquals(policy.start_date, core.datetime.date(2020, 11, 1))
-        self.assertEquals(policy.expiry_date, core.datetime.date(2021, 10, 31))
-        self.assertEquals(policy.value, 1180)  # 2 x 300 + 200 + 250 + 130
+        self.assertEqual(policy.start_date, core.datetime.date(2020, 11, 1))
+        self.assertEqual(policy.expiry_date, core.datetime.date(2021, 10, 31))
+        self.assertEqual(policy.value, 1180)  # 2 x 300 + 200 + 250 + 130
 
     def test_new_policy_lump_sum_and_cycles(self):
         head_insuree = create_test_insuree(
@@ -127,9 +127,9 @@ class PolicyValuesTestCase(TestCase):
             },
         )
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
-        self.assertEquals(policy.start_date, core.datetime.date(2021, 1, 1))
-        self.assertEquals(policy.expiry_date, core.datetime.date(2021, 12, 31))
-        self.assertEquals(policy.value, 230)  # 200 + 2 x 10 + 0
+        self.assertEqual(policy.start_date, core.datetime.date(2021, 1, 1))
+        self.assertEqual(policy.expiry_date, core.datetime.date(2021, 12, 31))
+        self.assertEqual(policy.value, 230)  # 200 + 2 x 10 + 0
 
         # let's add a child (outside threshold)  and shift date in 1st cycle grace period
         child = Relation.objects.get(id=4)
@@ -150,9 +150,9 @@ class PolicyValuesTestCase(TestCase):
             },
         )
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
-        self.assertEquals(policy.start_date, core.datetime.date(2021, 1, 1))
-        self.assertEquals(policy.expiry_date, core.datetime.date(2021, 12, 31))
-        self.assertEquals(policy.value, 445)  # 200 + 1 x 200 + 3 x 10 + 3 x 5
+        self.assertEqual(policy.start_date, core.datetime.date(2021, 1, 1))
+        self.assertEqual(policy.expiry_date, core.datetime.date(2021, 12, 31))
+        self.assertEqual(policy.value, 445)  # 200 + 1 x 200 + 3 x 10 + 3 x 5
 
     def test_new_policy_admin_period_max_members_insurance_period(self):
         head_insuree = create_test_insuree(
@@ -197,11 +197,11 @@ class PolicyValuesTestCase(TestCase):
             },
         )
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
-        self.assertEquals(
+        self.assertEqual(
             policy.start_date, core.datetime.date(2021, 6, 1)
         )  # enroll + admin outside cycle 1 + grace
-        self.assertEquals(policy.expiry_date, core.datetime.date(2021, 11, 30))
-        self.assertEquals(policy.value, 530)  # 200 + 300 + 2 x 10 + 2 x 5
+        self.assertEqual(policy.expiry_date, core.datetime.date(2021, 11, 30))
+        self.assertEqual(policy.value, 530)  # 200 + 300 + 2 x 10 + 2 x 5
 
         # let's add a child... outside max members so not counted!
         # ... and shift date to fall into grace period
@@ -224,8 +224,8 @@ class PolicyValuesTestCase(TestCase):
         )
 
         policy, warnings = policy_values(policy, head_insuree.family, None, self.user)
-        self.assertEquals(
+        self.assertEqual(
             policy.start_date, core.datetime.date(2022, 1, 1)
         )  # enroll + admin in cycle 1 + grace
-        self.assertEquals(policy.expiry_date, core.datetime.date(2022, 6, 30))
-        self.assertEquals(policy.value, 530)  # 200 + 300 + 2 x 10 + 2 x 5
+        self.assertEqual(policy.expiry_date, core.datetime.date(2022, 6, 30))
+        self.assertEqual(policy.value, 530)  # 200 + 300 + 2 x 10 + 2 x 5
