@@ -255,7 +255,7 @@ class EligibilityServiceTestCase(TestCase):
         self.assertIsNotNone(native_response)
         self.assertEqual(native_response, expected_resposnse)
         result = PolicyService(self.user).set_deleted(policy)
-        self.assertNotEquals(
+        self.assertNotEqual(
             result, [], "the policy cannot be deleted as it has some DedRem on it"
         )
 
