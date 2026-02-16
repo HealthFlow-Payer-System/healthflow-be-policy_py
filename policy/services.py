@@ -9,10 +9,8 @@ from django import dispatch
 from django.core.exceptions import (
     PermissionDenied,
     ValidationError,
-    ObjectDoesNotExist,
     MultipleObjectsReturned,
 )
-from django.db import connection
 from django.db.models import Q, Count, Min, Max, Sum, F
 from django.db.models.functions import Coalesce
 from django.template import Template, Context
@@ -30,6 +28,8 @@ from .models import Policy, PolicyRenewal
 
 logger = logging.getLogger(__name__)
 
+cache = caches['coverage']
+
 
 def reset_policy_before_update(policy):
     policy.enroll_date = None
@@ -40,7 +40,6 @@ def reset_policy_before_update(policy):
     policy.family_id = None
     policy.officer_id = None
 
-cache = caches['coverage']
 
 class PolicyRenewalService:
     def __init__(self, user):
@@ -49,7 +48,7 @@ class PolicyRenewalService:
     def delete(self, policy_renewal):
         try:
             policy_renewal.delete_history()
-            logger.info(f"Deleting the related policy renewal details, if any")
+            logger.info("Deleting the related policy renewal details, if any")
             for detail in policy_renewal.details.all():
                 detail.delete_history()
             return []
@@ -177,7 +176,7 @@ class PolicyService:
             policy.audit_user_id = user.id_for_audit
             policy.save()
             return []
-        except Exception as exc:
+        except Exception:
             return {
                 "title": policy.uuid,
                 "list": [
@@ -208,7 +207,7 @@ class PolicyService:
                 insuree_policy.delete_history()
             policy.delete_history()
             return []
-        except Exception as exc:
+        except Exception:
             return {
                 "title": policy.uuid,
                 "list": [
@@ -557,11 +556,13 @@ class ByFamilyService(FilteredPoliciesService):
             res = products.values()
         items = tuple(map(lambda x: FilteredPoliciesService._to_item(x), res))
         return ByFamilyResponse(by_family_request=by_family_request, items=items)
+
+
 @core.comparable
 class ByPolicyRequest(object):
 
     def __init__(
-        self,      
+        self,
         policy_uuid,
         chf_id=None,
         insuree_uuid=None,
@@ -574,7 +575,7 @@ class ByPolicyRequest(object):
             raise ValueError(_("policy.service.eligibility.insuree_id_or_uuid_missing"))
         self.policy_uuid = policy_uuid
         self.chf_id = chf_id
-        self.insuree_uuid = insuree_uuid 
+        self.insuree_uuid = insuree_uuid
         self.active_or_last_expired_only = active_or_last_expired_only
         self.show_history = show_history
         self.order_by = order_by
@@ -587,7 +588,7 @@ class ByPolicyRequest(object):
 @core.comparable
 class ByPolicyResponse(object):
 
-    def __init__(self, by_family_request, items):
+    def __init__(self, by_policy_request, items):
         self.by_policy_request = by_policy_request
         self.items = items
 
@@ -617,6 +618,7 @@ class ByPolicyService(FilteredPoliciesService):
         items = tuple(map(lambda x: FilteredPoliciesService._to_item(x), res))
         return ByPolicyResponse(by_policy_request=by_policy_request, items=items)
 
+
 # --- ELIGIBILITY --
 # TODO: should become "BY FAMILY":
 # Eligibility is calculated from a Policy
@@ -625,7 +627,7 @@ class ByPolicyService(FilteredPoliciesService):
 @core.comparable
 class EligibilityRequest(object):
 
-    def __init__(self, chf_id=None, service_code=None, item_code=None, 
+    def __init__(self, chf_id=None, service_code=None, item_code=None,
                  policy_uuid=None, insuree_uuid=None):
         if chf_id is None and insuree_uuid is None:
             raise ValueError(_("policy.service.eligibility.insuree_id_or_uuid_missing"))
@@ -634,7 +636,6 @@ class EligibilityRequest(object):
         self.item_code = item_code
         self.policy_uuid = policy_uuid
         self.insuree_uuid = insuree_uuid
-        
 
     def __eq__(self, other):
         return isinstance(other, self.__class__) and self.__dict__ == other.__dict__
@@ -777,6 +778,7 @@ class EligibilityService(object):
             return final_responses[0]
         else:
             return responses[-1]
+
 
 class NativeEligibilityService(object):
     def __init__(self, user):
@@ -931,7 +933,6 @@ class NativeEligibilityService(object):
                 insuree, "item", Item, req, now
             )
         else:
-            item = None
             items_left = None
             min_date_item = None
         eligibility.min_date_item = min_date_item
@@ -1418,12 +1419,12 @@ def update_insuree_policies(policy, user, members=None):
     members = get_members(policy, policy.family, user, members)
     for member in members:
         existing_ip = InsureePolicy.objects.filter(
-            validity_to__isnull=True, insuree=member, policy=policy
+            *InsureePolicy.filter_validity(), insuree=member, policy=policy
         ).first()
         if existing_ip:
             existing_ip.save_history()
         ip, ip_created = InsureePolicy.objects.filter(
-            validity_to__isnull=True
+            *InsureePolicy.filter_validity()
         ).update_or_create(
             insuree=member,
             policy=policy,
@@ -1434,7 +1435,7 @@ def update_insuree_policies(policy, user, members=None):
                 expiry_date=policy.expiry_date,
                 offline=policy.offline,
                 audit_user_id=(
-                    user.id_for_audit if hasattr(user, "audit_user_id") else user
+                    getattr(user, "id_for_audit", getattr(user, "id", user if isinstance(user, int) else -1))
                 ),
             ),
         )

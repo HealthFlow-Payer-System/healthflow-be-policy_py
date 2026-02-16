@@ -1,7 +1,6 @@
 from django.apps import AppConfig
 from django.conf import settings
-import importlib
-import inspect
+
 
 settings.SCHEDULER_JOBS.append(
     {

@@ -1,17 +1,14 @@
 from unittest import mock, skip
-
+import datetime
+from django.core.exceptions import PermissionDenied
+from policy.apps import PolicyConfig
 from claim.test_helpers import (
     create_test_claim,
     create_test_claimservice,
     create_test_claimitem,
 )
-from claim.validations import (
-    validate_claim,
-    validate_assign_prod_to_claimitems_and_services,
-)
 from claim.services import processing_claim
-from core.models import InteractiveUser, User
-from core.test_helpers import create_test_officer
+from core.test_helpers import create_test_officer, create_test_interactive_user
 from django.conf import settings
 from django.test import TestCase
 from insuree.test_helpers import create_test_photo
@@ -20,20 +17,24 @@ from medical_pricelist.test_helpers import (
     add_service_to_hf_pricelist,
     add_item_to_hf_pricelist,
 )
-from insuree.test_helpers import create_test_insuree
 from policy.test_helpers import create_test_policy2, create_test_insuree_for_policy
 from product.test_helpers import (
     create_test_product,
     create_test_product_service,
     create_test_product_item,
 )
-from location.test_helpers import create_test_health_facility
-from policy.services import *
-from medical_pricelist.test_helpers import (
-    create_test_item_pricelist,
-    create_test_service_pricelist,
+from policy.services import (
+    policy_renewal_sms,
+    insert_renewals,
+    update_renewals,
+    signal_eligibility_service_before,
+    EligibilityRequest,
+    EligibilityService,
+    EligibilityResponse,
+    NativeEligibilityService,
+    PolicyService,
 )
-from django.db import connection
+from policy.models import PolicyRenewal, Policy
 
 
 class EligibilityServiceTestCase(TestCase):
@@ -42,7 +43,6 @@ class EligibilityServiceTestCase(TestCase):
         self.user = mock.Mock(is_anonymous=False)
         self.user.has_perms = mock.MagicMock(return_value=True)
         self.user.id_for_audit = -1
-        
 
     def test_eligibility_request_permission_denied(self):
         with mock.patch("django.db.backends.utils.CursorWrapper") as mock_cursor:
@@ -51,7 +51,7 @@ class EligibilityServiceTestCase(TestCase):
             mock_user.has_perms = mock.MagicMock(return_value=False)
             req = EligibilityRequest(chf_id="a")
             service = EligibilityService(mock_user)
-            with self.assertRaises(PermissionDenied) as cm:
+            with self.assertRaises(PermissionDenied):
                 service.request(req)
             mock_user.has_perms.assert_called_with(
                 PolicyConfig.gql_query_eligibilities_perms
@@ -65,8 +65,8 @@ class EligibilityServiceTestCase(TestCase):
             return_values = [
                 list(range(1, 13)),
                 [
-                    core.datetime.date(2020, 1, 9),
-                    core.datetime.date(2020, 1, 10),
+                    datetime.date(2020, 1, 9),
+                    datetime.date(2020, 1, 10),
                     20,
                     21,
                     True,
@@ -113,50 +113,6 @@ class EligibilityServiceTestCase(TestCase):
             )
             self.assertEqual(expected, res)
 
-    def test_eligibility_sp_call(self):
-        if not connection.vendor == "mssql":
-            self.skipTest("This test can only be executed for MSSQL database")
-        mock_user = mock.Mock(is_anonymous=False)
-        mock_user.has_perm = mock.MagicMock(return_value=True)
-        req = EligibilityRequest(chf_id="070707070")
-        service = StoredProcEligibilityService(mock_user)
-        res = service.request(req, EligibilityResponse(req))
-        expected = EligibilityResponse(
-            eligibility_request=req,
-            prod_id=4,
-            total_admissions_left=None,
-            total_visits_left=None,
-            total_consultations_left=None,
-            total_surgeries_left=None,
-            total_deliveries_left=None,
-            total_antenatal_left=None,
-            consultation_amount_left=None,
-            surgery_amount_left=None,
-            delivery_amount_left=None,
-            hospitalization_amount_left=None,
-            antenatal_amount_left=None,
-            min_date_service=None,
-            min_date_item=None,
-            service_left=None,
-            item_left=None,
-            is_item_ok=True,
-            is_service_ok=True,
-        )
-        self.assertEqual(expected, res)
-
-    def test_eligibility_stored_proc_serv(self):
-        if not connection.vendor == "mssql":
-            self.skipTest("This test can only be executed for MSSQL database")
-        for category in [
-            Service.CATEGORY_SURGERY,
-            Service.CATEGORY_CONSULTATION,
-            Service.CATEGORY_HOSPITALIZATION,
-            Service.CATEGORY_OTHER,
-            Service.CATEGORY_ANTENATAL,
-        ]:
-            with self.subTest(category=category):
-                self.eligibility_serv(category)
-
     def eligibility_serv(self, category):
         insuree, family = create_test_insuree_for_policy(
             custom_props={"chf_id": "elgsp" + category}
@@ -164,12 +120,12 @@ class EligibilityServiceTestCase(TestCase):
         product = create_test_product("ELI1")
         (policy, insuree_policy) = create_test_policy2(product, insuree)
         service = create_test_service(category)
-        svc_pl_detail = add_service_to_hf_pricelist(service)
-        product_service = create_test_product_service(
+        add_service_to_hf_pricelist(service)
+        create_test_product_service(
             product, service, custom_props={"limit_no_adult": 20}
         )
         claim = create_test_claim(custom_props={"insuree_id": insuree.id})
-        claim_service = create_test_claimservice(
+        create_test_claimservice(
             claim, custom_props={"service_id": service.id}, product=product
         )
         errors = processing_claim(claim, self.user, True)
@@ -187,7 +143,7 @@ class EligibilityServiceTestCase(TestCase):
             is_item_ok=True,
             is_service_ok=True,
             item_left=None,
-            min_date_item=core.datetime.date(2019, 3, 1),
+            min_date_item=datetime.date(2019, 3, 1),
             min_date_service=None,
             prod_id=product.id,
             service_left=13.00,
@@ -209,13 +165,13 @@ class EligibilityServiceTestCase(TestCase):
         product = create_test_product("ELI1")
         (policy, insuree_policy) = create_test_policy2(product, insuree)
         item = create_test_item("A")
-        
-        product_item = create_test_product_item(
+
+        create_test_product_item(
             product, item, custom_props={"limit_no_adult": 12}
         )
         claim = create_test_claim(custom_props={"insuree_id": insuree.id})
-        item_pl_detail = add_item_to_hf_pricelist(item, claim.health_facility_id)
-        claim_item = create_test_claimitem(
+        add_item_to_hf_pricelist(item, claim.health_facility)
+        create_test_claimitem(
             claim, "A", custom_props={"item_id": item.id}, product=product
         )
         errors = processing_claim(claim, self.user, True)
@@ -233,7 +189,7 @@ class EligibilityServiceTestCase(TestCase):
             is_item_ok=True,
             is_service_ok=True,
             item_left=5.00,
-            min_date_item=core.datetime.date(2019, 3, 1),
+            min_date_item=datetime.date(2019, 3, 1),
             min_date_service=None,
             prod_id=product.id,
             service_left=None,
@@ -256,16 +212,16 @@ class EligibilityServiceTestCase(TestCase):
         product = create_test_product("ELI1")
         (policy, insuree_policy) = create_test_policy2(product, insuree)
         item = create_test_item("A")
-        
-        product_item = create_test_product_item(
+
+        create_test_product_item(
             product, item, custom_props={"limit_no_adult": 12}
         )
         claim = create_test_claim(custom_props={"insuree_id": insuree.id})
-        item_pl_detail = add_item_to_hf_pricelist(item, claim.health_facility_id)
-        claim_item = create_test_claimitem(
-            claim, "A", custom_props={"item_id": item.id}, product = product
+        add_item_to_hf_pricelist(item, claim.health_facility)
+        create_test_claimitem(
+            claim, "A", custom_props={"item_id": item.id}, product=product
         )
-  
+
         errors = processing_claim(claim, self.user, True)
         self.assertEqual(len(errors), 0)
 
@@ -281,7 +237,7 @@ class EligibilityServiceTestCase(TestCase):
             is_item_ok=True,
             is_service_ok=True,
             item_left=5.00,
-            min_date_item=core.datetime.date(2019, 3, 1),
+            min_date_item=datetime.date(2019, 3, 1),
             min_date_service=None,
             prod_id=product.id,
             service_left=None,
@@ -299,37 +255,9 @@ class EligibilityServiceTestCase(TestCase):
         self.assertIsNotNone(native_response)
         self.assertEqual(native_response, expected_resposnse)
         result = PolicyService(self.user).set_deleted(policy)
-        self.assertNotEquals(
+        self.assertNotEqual(
             result, [], "the policy cannot be deleted as it has some DedRem on it"
         )
-
-    @skip(
-        "Not sure what is the proper behaviour when an IP is not present, skipping for now so that the main case"
-        "can be fixed."
-    )
-    def test_eligibility_stored_proc_item_no_insuree_policy(self):
-        insuree = create_test_insuree_for_policy()
-        product = create_test_product("ELI1")
-        (policy, _) = create_test_policy2(
-            product, insuree, link=False, custom_props={"status": Policy.STATUS_IDLE}
-        )
-        item = create_test_item("A")
-        item_pl_detail = add_item_to_hf_pricelist(item)
-        product_item = create_test_product_item(
-            product, item, custom_props={"limit_no_adult": 12}
-        )
-
-        sp_el_svc = StoredProcEligibilityService(self.user)
-        native_el_svc = NativeEligibilityService(self.user)
-        req = EligibilityRequest(chf_id=insuree.chf_id, item_code=item.code)
-        settings.ROW_SECURITY = False
-        sp_response = EligibilityResponse(req)
-        sp_response = sp_el_svc.request(req, sp_response)
-        native_response = EligibilityResponse(req)
-        native_response = native_el_svc.request(req, native_response)
-        self.assertIsNotNone(native_response)
-        self.assertIsNotNone(sp_response)
-        self.assertEqual(native_response, sp_response)
 
     def test_eligibility_signal(self):
 
@@ -341,15 +269,15 @@ class EligibilityServiceTestCase(TestCase):
         product = create_test_product("ELI1")
         (policy, insuree_policy) = create_test_policy2(product, insuree)
         item = create_test_item("A")
-        
-        product_item = create_test_product_item(
+
+        create_test_product_item(
             product, item, custom_props={"limit_no_adult": 12}
         )
         claim = create_test_claim(
             custom_props={"insuree_id": insuree.id, "date_to": None}
         )
-        item_pl_detail = add_item_to_hf_pricelist(item, claim.health_facility_id)
-        claim_item = create_test_claimitem(
+        add_item_to_hf_pricelist(item, claim.health_facility)
+        create_test_claimitem(
             claim, "A", custom_props={"item_id": item.id}, product=product
         )
         errors = processing_claim(claim, self.user, True)
@@ -378,10 +306,8 @@ class RenewalsTestCase(TestCase):
 
     def setUp(self) -> None:
         super(RenewalsTestCase, self).setUp()
-        self.i_user = InteractiveUser(
-            login_name="test_batch_run", audit_user_id=978911, id=97891
-        )
-        self.user = User(i_user=self.i_user)
+
+        self.user = create_test_interactive_user(username='test_batch_run')
 
         self.item_1 = create_test_item("D")
 
@@ -528,8 +454,8 @@ class RenewalsTestCase(TestCase):
         officer = create_test_officer(
             custom_props={"phone": "+32444444444", "phone_communication": True}
         )
-        photo_newpic = create_test_photo(insuree_newpic.id, officer.id)
-        photo_oldpic = create_test_photo(insuree_oldpic.id, officer.id)
+        create_test_photo(insuree_newpic.id, officer.id)
+        create_test_photo(insuree_oldpic.id, officer.id)
 
         (policy_new_pic, inspolicy_new_pic) = create_test_policy2(
             product=product,

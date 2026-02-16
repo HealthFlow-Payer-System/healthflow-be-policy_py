@@ -1,5 +1,4 @@
 import logging
-from functools import lru_cache
 
 from django.db import migrations
 from core.utils import insert_role_right_for_system

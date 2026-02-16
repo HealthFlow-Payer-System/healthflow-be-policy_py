@@ -2,12 +2,9 @@ import uuid
 import sys
 from core import fields
 from core import models as core_models
-from core.utils import filter_validity
 from core.models import Officer
 from django.core.cache import caches
-cache = caches['coverage']
 from django_redis.cache import RedisCache
-
 from django.conf import settings
 from django.db import models
 from graphql import ResolveInfo
@@ -17,6 +14,8 @@ from contribution_plan.models import ContributionPlan
 from django.utils import timezone as django_tz
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
+
+cache = caches['coverage']
 
 
 class Policy(core_models.VersionedModel):
@@ -73,7 +72,7 @@ class Policy(core_models.VersionedModel):
         return models.Sum(
             "premiums__amount",
             filter=models.Q(
-                *filter_validity(prefix="premiums__"), premiums__is_photo_fee=photo
+                *Policy.filter_validity(prefix="premiums__"), premiums__is_photo_fee=photo
             ),
         )
 
@@ -206,15 +205,20 @@ class PolicyMutation(core_models.UUIDModel, core_models.ObjectMutation):
         managed = True
         db_table = "policy_PolicyMutation"
 
+
 class PolicyRenewalMutation(core_models.UUIDModel, core_models.ObjectMutation):
-    policy_renewal = models.ForeignKey(PolicyRenewal, models.DO_NOTHING,
-                                 related_name='mutations')
+    policy_renewal = models.ForeignKey(
+        PolicyRenewal,
+        models.DO_NOTHING,
+        related_name='mutations'
+    )
     mutation = models.ForeignKey(
         core_models.MutationLog, models.DO_NOTHING, related_name='policy_renewals')
 
     class Meta:
         managed = True
         db_table = "policy_renewal_PolicyMutation"
+
 
 if "claim" in sys.modules:
     from claim.models import Claim

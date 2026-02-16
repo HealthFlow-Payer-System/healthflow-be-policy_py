@@ -58,6 +58,7 @@ class PolicyGQLType(DjangoObjectType):
         # that can return multiple rows per Policy if multiple InsureePolicies exist.
         return queryset.distinct()
 
+
 class PolicyRenewalGQLType(DjangoObjectType):
     class Meta:
         model = PolicyRenewal
@@ -65,6 +66,7 @@ class PolicyRenewalGQLType(DjangoObjectType):
         filter_fields = {
         }
         connection_class = ExtendedConnection
+
 
 class PolicyAndWarningsGQLType(graphene.ObjectType):
     policy = graphene.Field(PolicyGQLType)

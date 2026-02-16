@@ -12,8 +12,10 @@ class Migration(migrations.Migration):
     operations = [
         migrations.AddConstraint(
             model_name='policyrenewal',
-            constraint=models.UniqueConstraint(condition=models.Q(('validity_to__isnull',True)),
-            fields=('policy', 'validity_to'), 
-            name='unique_policy_validity_to_null'),
+            constraint=models.UniqueConstraint(
+                condition=models.Q(('validity_to__isnull', True)),
+                fields=('policy', 'validity_to'),
+                name='unique_policy_validity_to_null'
+            ),
         ),
     ]

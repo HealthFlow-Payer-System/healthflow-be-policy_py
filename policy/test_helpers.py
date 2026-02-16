@@ -4,7 +4,6 @@ from insuree.test_helpers import create_test_insuree
 from policy.models import Policy
 from policy.values import policy_values
 from product.models import Product
-from core.utils import filter_validity
 from core.test_helpers import create_test_interactive_user
 import datetime
 
@@ -37,7 +36,7 @@ def create_test_policy2(
     :return: The created Policy and InsureePolicy
     """
     policy_qs = Policy.objects.filter(
-        family=insuree.family, product=product, *filter_validity()
+        family=insuree.family, product=product, *Policy.filter_validity()
     )
     if custom_props is None:
         custom_props = {}
@@ -72,7 +71,7 @@ def create_test_policy2(
 
     if link:
         insuree_policy = InsureePolicy.objects.filter(
-            insuree=insuree, policy=policy, *filter_validity()
+            insuree=insuree, policy=policy, *InsureePolicy.filter_validity()
         ).first()
         if not insuree_policy:
             insuree_policy = InsureePolicy.objects.create(

@@ -3,7 +3,6 @@ from core.schema import (
     OrderedDjangoFilterConnectionField,
     signal_mutation_module_validate,
 )
-from core.utils import filter_validity
 import graphene
 from django.core.exceptions import PermissionDenied
 from django.db.models import Prefetch
@@ -185,7 +184,7 @@ class Query(graphene.ObjectType):
             raise PermissionDenied(_("unauthorized"))
         query = Policy.objects
         if not kwargs.get("showHistory", False):
-            query = query.filter(*filter_validity(**kwargs))
+            query = query.filter(*Policy.filter_validity(**kwargs))
         if kwargs.get("showInactive", False):
             family_count = (
                 Insuree.objects.values("family_id")

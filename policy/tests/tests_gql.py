@@ -1,15 +1,7 @@
-import base64
 import json
-from dataclasses import dataclass
-from core.utils import filter_validity
-from core.models import User
-from core.test_helpers import create_test_interactive_user
+from core.test_helpers import create_test_interactive_user, create_test_officer
 from core.models.openimis_graphql_test_case import openIMISGraphQLTestCase, BaseTestContext as DummyContext
 
-
-from django.conf import settings
-from medical.models import Service
-from graphene_django.utils.testing import GraphQLTestCase
 from graphql_jwt.shortcuts import get_token
 
 # credits https://docs.graphene-python.org/projects/django/en/latest/testing/
@@ -23,10 +15,8 @@ from product.test_helpers import (
     create_test_product_service,
     create_test_product_item,
 )
-from location.test_helpers import create_test_health_facility, create_test_village
+from location.test_helpers import create_test_village
 from uuid import UUID
-
-
 
 
 class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
@@ -96,6 +86,8 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             with_family=False, custom_props={"family": cls.insuree.family}
         )
 
+        cls.test_officer = create_test_officer()
+
     def test_insuree_policy_query(self):
 
         response = self.query(
@@ -118,7 +110,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
-        content = json.loads(response.content)
+        json.loads(response.content)
 
         # This validates the status code and if you get errors
         self.assertResponseNoErrors(response)
@@ -312,10 +304,11 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
-        content = json.loads(response.content)
+        json.loads(response.content)
 
         # This validates the status code and if you get errors
         self.assertResponseNoErrors(response)
+
     def test_insuree_policy_item_query(self):
 
         # Add some more asserts if you like
@@ -331,7 +324,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
-        content = json.loads(response.content)
+        json.loads(response.content)
 
         # This validates the status code and if you get errors
         self.assertResponseNoErrors(response)
@@ -356,7 +349,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
 
     def test_mutation_simple(self):
         muuid = "203327cd-501e-41e1-a026-ed742e360081"
-        response = self.query(
+        self.query(
             f"""
     mutation {{
       createPolicy(
@@ -370,7 +363,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             value: "10000.00"
             productId: {self.product.id}
             familyId: {self.insuree.family.id}
-            officerId: 1
+            officerId: {self.test_officer.id}
                     }}
         ) {{
             clientMutationId
@@ -381,7 +374,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
             variables={"chfid": self.insuree.chf_id, "activeOrLastExpiredOnly": True},
         )
-        content = self.get_mutation_result(muuid, self.admin_token)
+        self.get_mutation_result(muuid, self.admin_token)
 
     def test_insuree_policy_value_query(self):
 
@@ -400,7 +393,7 @@ class PolicyGraphQLTestCase(openIMISGraphQLTestCase):
             headers={"HTTP_AUTHORIZATION": f"Bearer {self.admin_token}"},
         )
 
-        content = json.loads(response.content)
+        json.loads(response.content)
 
         # This validates the status code and if you get errors
         self.assertResponseNoErrors(response)
