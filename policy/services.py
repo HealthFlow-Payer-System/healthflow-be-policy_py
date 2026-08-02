@@ -602,7 +602,7 @@ class ByPolicyService(FilteredPoliciesService):
 
     def request(self, by_policy_request):
         res = self.build_query(by_policy_request)
-        res = res.filter(fuuid=by_policy_request.policy_uuid)
+        res = res.filter(uuid=by_policy_request.policy_uuid)
         # .distinct('product__code') >> DISTINCT ON fields not supported by MS-SQL
         if by_policy_request.active_or_last_expired_only:
             products = {}
