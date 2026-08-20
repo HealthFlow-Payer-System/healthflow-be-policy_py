@@ -1,4 +1,9 @@
-# openIMIS Backend Policy reference module
+# HealthFlow Backend Policy reference module
+
+> **HealthFlow Payer System — Egypt context**
+>
+> This repository is maintained under [HealthFlow Payer System](https://github.com/HealthFlow-Payer-System), an Egypt-focused health-insurance platform built on openIMIS foundations. Egypt-specific localization is applied at the assembly and module boundaries; consult the repository-specific configuration and deployment documentation for the capabilities enabled here.
+
 This repository holds the files of the openIMIS Backend Policy reference module. It is dedicated to be deployed as a module of [openimis-be_py](https://github.com/openimis/openimis-be_py).
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
